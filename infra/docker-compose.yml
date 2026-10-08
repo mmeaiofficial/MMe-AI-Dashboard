@@ -1,0 +1,37 @@
+# Local development: Postgres, Redis, MinIO (S3), n8n, API and web.
+#   docker compose -f infra/docker-compose.yml up --build
+services:
+  db:
+    image: postgres:16
+    environment: { POSTGRES_USER: mme, POSTGRES_PASSWORD: mme, POSTGRES_DB: mme_os }
+    ports: ["5432:5432"]
+    volumes: [dbdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U mme"], interval: 5s, retries: 10 }
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    command: server /data --console-address ":9001"
+    environment: { MINIO_ROOT_USER: mme, MINIO_ROOT_PASSWORD: mme-dev-password }
+    ports: ["9000:9000", "9001:9001"]
+  n8n:
+    image: n8nio/n8n:1.72.1
+    ports: ["5678:5678"]
+    environment: { N8N_SECURE_COOKIE: "false" }
+  api:
+    build: ../apps/api
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://mme:mme@db:5432/mme_os
+      REDIS_URL: redis://redis:6379/0
+    ports: ["8000:8000"]
+    depends_on: { db: { condition: service_healthy }, redis: { condition: service_started } }
+  web:
+    image: node:22
+    working_dir: /web
+    command: sh -c "npm install && npm run dev"
+    environment: { NEXT_PUBLIC_API_ORIGIN: "http://localhost:8000" }
+    volumes: ["../apps/web:/web"]
+    ports: ["3000:3000"]
+volumes: { dbdata: {} }
