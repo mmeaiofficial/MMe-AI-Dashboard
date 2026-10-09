@@ -16,7 +16,7 @@ from ...authz import engine as E
 from ...core import google_oidc as G
 from ...core.config import load_settings
 from ...core.db import get_db
-from ...core.deps import Caller, public, public_context, signed_in_mfa_pending
+from ...core.deps import Caller, client_ip, public, public_context, signed_in_mfa_pending
 from ...core.models import MfaFactor, Role, User, UserRole
 from ...core.ratelimit import LIMITS, get_limiter
 from ...core.security import csrf_token, new_totp_secret, totp_uri, verify_password, verify_totp
@@ -48,7 +48,7 @@ def _redirect_web(path: str, error: str | None = None) -> RedirectResponse:
 # ---------- Google ----------
 @router.get("/google/start", dependencies=[Depends(public)])
 def google_start(request: Request, next: str | None = None, invite: str | None = None) -> RedirectResponse:
-    _limit("login_ip", request.client.host if request.client else "unknown")
+    _limit("login_ip", client_ip(request) or "unknown")
     req = G.build_auth_request(settings.google_client_id, settings.api_origin + "/api/v1/auth/google/callback")
     resp = RedirectResponse(req.url, status_code=303)
     payload = _signer.dumps({"s": req.state, "n": req.nonce, "v": req.code_verifier, "next": _safe_next(next), "invite": invite})
@@ -111,7 +111,7 @@ class PasswordLogin(BaseModel):
 @router.post("/password/login", dependencies=[Depends(public)])
 def password_login(body: PasswordLogin, request: Request, response: Response, db: DbSession = Depends(get_db)) -> dict:
     email = body.email.lower()
-    _limit("login_ip", request.client.host if request.client else "unknown")
+    _limit("login_ip", client_ip(request) or "unknown")
     _limit("login_email", email)
     org = S.default_org(db)
     user = db.scalar(select(User).where(User.organization_id == org.id, User.email == email))

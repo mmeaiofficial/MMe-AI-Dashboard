@@ -312,6 +312,31 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(s.cookie_secure)
         self.assertEqual(s.bootstrap_super_admins, ("a@b.com", "c@d.com"))
 
+    def test_hosted_postgres_urls_use_psycopg(self):
+        for given in ("postgres://u:p@h/db?sslmode=require", "postgresql://u:p@h/db?sslmode=require"):
+            self.assertEqual(load_settings({"DATABASE_URL": given}).database_url, "postgresql+psycopg://u:p@h/db?sslmode=require")
+        self.assertEqual(load_settings({"KV_URL": "rediss://default:t@x.upstash.io:6379"}).redis_url, "rediss://default:t@x.upstash.io:6379")
+
+
+class ClientIpTests(unittest.TestCase):
+    def _request(self, headers: dict[str, str], peer: str = "10.0.0.1"):
+        from starlette.requests import Request
+
+        raw = [(k.encode(), v.encode()) for k, v in headers.items()]
+        return Request({"type": "http", "headers": raw, "client": (peer, 1234)})
+
+    def test_forwarded_ip_trusted_only_on_vercel(self):
+        from unittest import mock
+
+        from app.core.deps import client_ip
+
+        spoofed = self._request({"x-real-ip": "203.0.113.9"})
+        with mock.patch.dict(os.environ, {"VERCEL": ""}):
+            self.assertEqual(client_ip(spoofed), "10.0.0.1")
+        with mock.patch.dict(os.environ, {"VERCEL": "1"}):
+            self.assertEqual(client_ip(spoofed), "203.0.113.9")
+            self.assertEqual(client_ip(self._request({})), "10.0.0.1")
+
 
 if __name__ == "__main__":
     unittest.main()

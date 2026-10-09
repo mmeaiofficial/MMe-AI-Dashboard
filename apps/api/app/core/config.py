@@ -57,12 +57,20 @@ class Settings:
             raise ConfigError("Refusing to start: " + "; ".join(problems))
 
 
+def _sqlalchemy_url(url: str) -> str:
+    """Hosted Postgres (Neon, Supabase, Vercel) gives postgres:// or postgresql://; we drive it with psycopg 3."""
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix) :]
+    return url
+
+
 def load_settings(env: Mapping[str, str] = os.environ) -> Settings:
     s = Settings(
         env=env.get("APP_ENV", "development"),
         secret_key=env.get("SECRET_KEY", "dev-secret"),
-        database_url=env.get("DATABASE_URL", Settings.database_url),
-        redis_url=env.get("REDIS_URL", Settings.redis_url),
+        database_url=_sqlalchemy_url(env.get("DATABASE_URL", Settings.database_url)),
+        redis_url=env.get("REDIS_URL") or env.get("KV_URL") or Settings.redis_url,
         web_origin=env.get("WEB_ORIGIN", Settings.web_origin),
         api_origin=env.get("API_ORIGIN", Settings.api_origin),
         google_client_id=env.get("GOOGLE_CLIENT_ID", ""),

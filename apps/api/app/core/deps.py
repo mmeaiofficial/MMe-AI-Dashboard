@@ -10,6 +10,7 @@ tests/api/test_route_permissions.py fails the build if a route declares none.
 from __future__ import annotations
 
 import ipaddress
+import os
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -45,9 +46,14 @@ class Caller:
     raw_token: str
 
 
-def _client_ip(request: Request) -> str | None:
-    """The caller's IP, or None when the transport reports something else (Unix socket, test client)."""
-    host = request.client.host if request.client else None
+def client_ip(request: Request) -> str | None:
+    """The caller's IP, or None when the transport reports something else (Unix socket, test client).
+
+    On Vercel the socket peer is Vercel's proxy; its edge sets x-real-ip to the visitor and overwrites any
+    value the client sent, so the header is trusted there and nowhere else.
+    """
+    host = request.headers.get("x-real-ip") if os.environ.get("VERCEL") == "1" else None
+    host = host or (request.client.host if request.client else None)
     try:
         return str(ipaddress.ip_address(host)) if host else None
     except ValueError:
@@ -58,7 +64,7 @@ def _ctx(request: Request, org_id: uuid.UUID, user_id: uuid.UUID | None) -> Requ
     return RequestContext(
         organization_id=org_id,
         actor_user_id=user_id,
-        ip=_client_ip(request),
+        ip=client_ip(request),
         user_agent=request.headers.get("user-agent"),
         request_id=request.headers.get("x-request-id") or getattr(request.state, "request_id", None),
     )

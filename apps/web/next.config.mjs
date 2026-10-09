@@ -1,6 +1,7 @@
-const api = process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:8000";
 // `next dev` runs its bundles through eval(); production builds do not and keep the strict policy.
 const dev = process.env.NODE_ENV !== "production";
+// Same domain in production (Vercel routes /api to the API), so 'self' already covers it.
+const api = process.env.NEXT_PUBLIC_API_ORIGIN ?? (dev ? "http://localhost:8000" : "");
 const csp = [
   "default-src 'self'",
   `connect-src 'self' ${api}`,

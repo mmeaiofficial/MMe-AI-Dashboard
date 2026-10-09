@@ -1,7 +1,9 @@
 // Thin client for the MME OS API. The session lives in an httpOnly cookie set by the API;
 // the CSRF token comes from /me and is sent on every write.
 
-export const API = (process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:8000") + "/api/v1";
+// Production serves the API on the same domain under /api, so the default there is a relative URL.
+const ORIGIN = process.env.NEXT_PUBLIC_API_ORIGIN ?? (process.env.NODE_ENV === "production" ? "" : "http://localhost:8000");
+export const API = ORIGIN + "/api/v1";
 
 export type Scope = "own" | "team" | "department" | "all";
 
