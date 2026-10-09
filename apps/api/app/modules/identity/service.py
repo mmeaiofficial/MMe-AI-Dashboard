@@ -59,8 +59,9 @@ def create_user(db: DbSession, org: Organization, email: str, name: str, google_
         role_ids = [base.id] if base else []
     for rid in role_ids:
         db.add(UserRole(user_id=user.id, role_id=rid, organization_id=org.id, granted_by=invitation.invited_by if invitation else None))
+    managed = set(invitation.manager_team_ids or []) if invitation else set()
     for tid in (invitation.team_ids if invitation else []):
-        db.add(TeamMember(team_id=tid, user_id=user.id, organization_id=org.id))
+        db.add(TeamMember(team_id=tid, user_id=user.id, organization_id=org.id, is_manager=tid in managed))
     if invitation:
         invitation.accepted_at = datetime.now(timezone.utc)
     record(db, RequestContext(org.id, user.id, ctx.ip, ctx.user_agent, ctx.request_id), "admin.user_created",

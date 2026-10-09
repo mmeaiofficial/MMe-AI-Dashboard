@@ -126,6 +126,10 @@ def test_cannot_demote_self_or_last_super_admin(as_user, world):
 
 
 def test_audit_log_is_append_only(world):
-    with pytest.raises(Exception):
-        with engine.begin() as c:
-            c.execute(text("UPDATE audit_events SET action = 'x.y'"))
+    # The trigger is per row, so the table needs a row for UPDATE/DELETE to be refused.
+    with engine.begin() as c:
+        c.execute(text("INSERT INTO audit_events (organization_id, action) VALUES (:o, 'test.event')"), {"o": world["org"].id})
+    for stmt in ("UPDATE audit_events SET action = 'x.y'", "DELETE FROM audit_events"):
+        with pytest.raises(Exception, match="append-only"):
+            with engine.begin() as c:
+                c.execute(text(stmt))

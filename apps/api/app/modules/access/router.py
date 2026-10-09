@@ -20,11 +20,15 @@ from ...core.ratelimit import LIMITS, get_limiter
 from ...core.security import new_token, token_hash
 from ..identity.service import revoke_all_sessions
 
+# Roles made for one person by "Give someone access" when their screens differ from their job.
+PERSONAL_PREFIX = "person_"
+
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 def _role_out(r: Role) -> dict:
     return {"id": str(r.id), "key": r.key, "name": r.name, "description": r.description, "is_system": r.is_system,
+            "personal": r.key.startswith(PERSONAL_PREFIX),
             "grants": sorted(({"permission": g.permission, "scope": g.scope} for g in r.grants), key=lambda x: x["permission"])}
 
 

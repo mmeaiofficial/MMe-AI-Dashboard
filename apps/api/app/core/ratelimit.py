@@ -65,4 +65,5 @@ LIMITS = {
     "invite_user": (30, 3600),
     "export_user": (20, 3600),
     "api_user": (600, 60),
+    "assistant_user": (60, 3600),
 }

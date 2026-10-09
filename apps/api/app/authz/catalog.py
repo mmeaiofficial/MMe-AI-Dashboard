@@ -21,11 +21,12 @@ RESOURCES: dict[str, str] = {
     "system.settings": "Organization settings, domains, integrations, security",
     # Later milestones
     "crm.leads": "Leads and contacts",
-    "sales.deals": "Deals and pipeline",
+    "sales.calls": "Cold calling: call queue and call log",
+    "sales.deals": "Meetings and deals",
     "clients.accounts": "Client accounts (360 profile)",
     "billing.subscriptions": "Plans, subscriptions, invoices, payments",
     "work.projects": "Projects and milestones",
-    "work.tasks": "Tasks",
+    "work.tasks": "Tasks and tickets",
     "hr.attendance": "Attendance",
     "hr.leave": "Leave requests",
     "automation.workflows": "Automation workflows and runs",
@@ -45,7 +46,7 @@ def g(resource: str, actions: str, scope: str) -> list[tuple[str, str]]:
 DEFAULT_ROLES: dict[str, dict] = {
     "operations_admin": {
         "name": "Operations admin",
-        "grants": g("crm.leads", "view", "all") + g("sales.deals", "view", "all")
+        "grants": g("crm.leads", "view", "all") + g("sales.calls", "view", "all") + g("sales.deals", "view", "all")
         + g("clients.accounts", "view,create,edit", "all") + g("billing.subscriptions", "view", "all")
         + g("work.projects", "view,create,edit", "all") + g("work.tasks", "view,create,edit", "all")
         + g("hr.attendance", "view", "all") + g("hr.leave", "view,approve", "all")
@@ -54,7 +55,8 @@ DEFAULT_ROLES: dict[str, dict] = {
     },
     "sales_manager": {
         "name": "Sales manager",
-        "grants": g("crm.leads", "view,create,edit,export", "team") + g("sales.deals", "view,create,edit,export", "team")
+        "grants": g("crm.leads", "view,create,edit,export", "team") + g("sales.calls", "view,create,edit", "team")
+        + g("sales.deals", "view,create,edit,export", "team")
         + g("clients.accounts", "view", "team") + g("billing.subscriptions", "view", "team")
         + g("work.tasks", "view,create,edit", "team") + g("work.projects", "view", "team")
         + g("hr.attendance", "view", "team") + g("hr.leave", "view,approve", "team")
@@ -62,7 +64,8 @@ DEFAULT_ROLES: dict[str, dict] = {
     },
     "sales_executive": {
         "name": "Sales executive",
-        "grants": g("crm.leads", "view,create,edit", "own") + g("sales.deals", "view,create,edit", "own")
+        "grants": g("crm.leads", "view,create,edit", "own") + g("sales.calls", "view,create", "own")
+        + g("sales.deals", "view,create,edit", "own")
         + g("clients.accounts", "view", "own") + g("work.tasks", "view,create,edit", "own")
         + g("hr.attendance", "view,create", "own") + g("hr.leave", "view,create", "own")
         + g("org.employees", "view", "team") + g("reports.analytics", "view", "own"),
@@ -79,6 +82,24 @@ DEFAULT_ROLES: dict[str, dict] = {
         + g("work.tasks", "view,create,edit", "team") + g("automation.workflows", "view,create,edit", "team")
         + g("ai.agents", "view", "team") + g("hr.attendance", "view,create", "own") + g("hr.leave", "view,create", "own")
         + g("org.employees", "view", "team") + g("reports.analytics", "view", "team"),
+    },
+    # MME-AI pipeline: lead team -> Sales L1 (cold calls) -> Sales L2 (meetings) -> tech (tickets).
+    # Team managers get the same role plus a team-scoped manager role (e.g. Sales manager) to see their team's work.
+    "lead_generation": {
+        "name": "Lead generation",
+        "grants": g("crm.leads", "view,create,edit", "own") + g("org.teams", "view", "team") + g("org.employees", "view", "team")
+        + g("work.tasks", "view", "own") + g("hr.attendance", "view,create", "own") + g("hr.leave", "view,create", "own"),
+    },
+    "sales_l1": {
+        "name": "Sales L1 (cold calling)",
+        "grants": g("sales.calls", "view,create", "own") + g("org.teams", "view", "team") + g("org.employees", "view", "team")
+        + g("work.tasks", "view", "own") + g("hr.attendance", "view,create", "own") + g("hr.leave", "view,create", "own"),
+    },
+    "sales_l2": {
+        "name": "Sales L2 (meetings and closing)",
+        "grants": g("sales.deals", "view,edit", "own") + g("clients.accounts", "view", "own") + g("work.projects", "view", "own")
+        + g("org.teams", "view", "team") + g("org.employees", "view", "team")
+        + g("work.tasks", "view", "own") + g("hr.attendance", "view,create", "own") + g("hr.leave", "view,create", "own"),
     },
     "customer_success": {
         "name": "Customer success",

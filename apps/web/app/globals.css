@@ -2,11 +2,66 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: light; }
-body { @apply bg-slate-50 text-slate-900 antialiased; }
-.card { @apply rounded-xl border border-slate-200 bg-white p-5; }
-.btn { @apply inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium hover:border-brand disabled:opacity-50; }
-.btn-primary { @apply btn border-brand bg-brand text-white; }
-.input { @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm; }
-.label { @apply text-xs font-medium uppercase tracking-wide text-slate-500; }
-.pill { @apply inline-block rounded-full bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-600; }
+/* Theme tokens: RGB channels. <html data-theme> is set before first paint (see app/layout.tsx).
+   Light uses only #FD1843 and #FFF9FA: every other value is a solid tint (#FD1843 over #FFF9FA) or a deeper
+   shade of #FD1843, chosen so small text stays at 4.5:1 or better. Dark uses only #FFBE0B and black.
+   Everything is flat: no gradients, shadows, glows, blur or see-through colors. */
+:root {
+  color-scheme: light;
+  --brand: 253 24 67;         /* #FD1843 accents, icons, large text */
+  --brand-fill: 223 21 59;    /* #DF153B fills that carry small text (4.7:1 with #FFF9FA) */
+  --brand-ink: 202 19 54;     /* #CA1336 hover */
+  --brand-text: 202 19 54;    /* #CA1336 small brand-colored text */
+  --brand-soft: 255 231 235;  /* #FFE7EB */
+  --on-brand: 255 249 250;    /* #FFF9FA */
+  --canvas: 255 241 244;      /* #FFF1F4 */
+  --surface: 255 249 250;     /* #FFF9FA */
+  --well: 255 231 235;        /* #FFE7EB */
+  --line: 253 24 67;
+  --border: 255 209 217;     /* #FFD1D9 solid hairline */
+  --ink: 101 10 27;           /* #650A1B */
+  --ink-soft: 152 14 40;      /* #980E28 */
+  --ink-faint: 177 17 47;     /* #B1112F */
+  --series-1: 253 24 67;      /* #FD1843 */
+  --series-2: 152 14 40;      /* #980E28, drawn dashed */
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --brand: 255 190 11;        /* #FFBE0B */
+  --brand-fill: 255 190 11;   /* black text on it: 12.6:1 */
+  --brand-ink: 204 152 9;     /* #CC9809 hover */
+  --brand-text: 255 190 11;
+  --brand-soft: 31 23 1;      /* #FFBE0B at 12% on black */
+  --on-brand: 0 0 0;
+  --canvas: 0 0 0;
+  --surface: 14 14 14;        /* #0E0E0E */
+  --well: 26 26 26;           /* #1A1A1A */
+  --line: 255 190 11;
+  --border: 38 38 38;        /* #262626 */
+  --ink: 255 190 11;          /* #FFBE0B */
+  --ink-soft: 204 152 9;      /* #CC9809 */
+  --ink-faint: 179 133 8;     /* #B38508, 5:1 on #1A1A1A */
+  --series-1: 186 139 8;      /* #BA8B08 dimmed so the line doesn't glare */
+  --series-2: 125 93 5;       /* #7D5D05, drawn dashed */
+}
+
+body { @apply bg-canvas text-ink antialiased; }
+
+@layer components {
+  .card { @apply rounded-4xl bg-surface p-6 ring-1 ring-border; }
+  .card-well { @apply rounded-4xl bg-well p-6; }
+  .btn { @apply inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2 text-sm font-medium text-ink ring-1 ring-border transition hover:ring-brand disabled:opacity-50; }
+  .btn-primary { @apply btn bg-brand-fill text-on-brand ring-brand-fill hover:bg-brand-ink; }
+  .btn-icon { @apply grid h-11 w-11 shrink-0 place-items-center rounded-full bg-surface text-ink ring-1 ring-border transition hover:ring-brand; }
+  .input { @apply w-full rounded-full border-0 bg-well px-4 py-2.5 text-sm text-ink ring-1 ring-transparent placeholder:text-ink-faint focus:bg-surface focus:outline-none focus:ring-brand; }
+  .label { @apply mb-1 block px-1 text-xs font-medium text-ink-soft; }
+  .pill { @apply inline-flex items-center rounded-full bg-well px-2.5 py-0.5 text-xs font-medium text-ink-soft; }
+  .pill-good { @apply pill bg-brand-soft text-brand-text; }
+  .pill-warn { @apply pill bg-surface text-ink ring-1 ring-brand; }
+  .pill-bad { @apply pill bg-brand-fill text-on-brand; }
+  .pill-brand { @apply pill bg-brand-soft text-brand-text; }
+  .alert-error { @apply rounded-2xl bg-brand-soft px-4 py-3 text-sm font-medium text-ink ring-1 ring-brand; }
+  .thead { @apply text-left text-xs font-medium text-ink-faint; }
+  .thead th { @apply border-b border-well; }
+}

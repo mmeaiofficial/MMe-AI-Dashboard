@@ -8,6 +8,7 @@ tests/api/test_route_permissions.py fails the build if a route declares none.
 """
 from __future__ import annotations
 
+import ipaddress
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -43,9 +44,18 @@ class Caller:
     raw_token: str
 
 
+def _client_ip(request: Request) -> Optional[str]:
+    """The caller's IP, or None when the transport reports something else (Unix socket, test client)."""
+    host = request.client.host if request.client else None
+    try:
+        return str(ipaddress.ip_address(host)) if host else None
+    except ValueError:
+        return None
+
+
 def _ctx(request: Request, org_id: uuid.UUID, user_id: Optional[uuid.UUID]) -> RequestContext:
     return RequestContext(organization_id=org_id, actor_user_id=user_id,
-                          ip=request.client.host if request.client else None,
+                          ip=_client_ip(request),
                           user_agent=request.headers.get("user-agent"),
                           request_id=request.headers.get("x-request-id") or getattr(request.state, "request_id", None))
 

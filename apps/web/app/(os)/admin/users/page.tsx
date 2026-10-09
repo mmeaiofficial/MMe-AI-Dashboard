@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "@/components/session";
 import { api, ApiError, can } from "@/lib/api";
@@ -12,9 +13,6 @@ export default function UsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
-  const [email, setEmail] = useState("");
-  const [roleId, setRoleId] = useState("");
-  const [link, setLink] = useState<string | null>(null);
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
 
@@ -34,42 +32,26 @@ export default function UsersPage() {
 
   return (
     <div className="max-w-5xl space-y-6">
-      <h1 className="text-2xl font-semibold">Users and access</h1>
-      {msg && <p role="status" className="rounded-lg bg-slate-100 px-3 py-2 text-sm">{msg}</p>}
+      <h1 className="text-2xl font-semibold tracking-tight">Users and access</h1>
+      {msg && <p role="status" className="rounded-2xl bg-surface px-4 py-3 text-sm ring-1 ring-border">{msg}</p>}
 
-      {can(me, "admin.users.create") && (
-        <section className="card space-y-3">
-          <h2 className="font-semibold">Invite an employee</h2>
-          <form className="flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault(); void run(async () => {
-              const r = await api.post<{ accept_path: string }>("/admin/invitations", { email, role_ids: roleId ? [roleId] : [] });
-              setLink(window.location.origin + r.accept_path); setEmail("");
-            }, "Invitation created. Send the link below to the person."); }}>
-            <div className="min-w-64 flex-1"><label className="label" htmlFor="inv-email">Google account email</label>
-              <input id="inv-email" className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-            <div><label className="label" htmlFor="inv-role">Role</label>
-              <select id="inv-role" className="input" value={roleId} onChange={(e) => setRoleId(e.target.value)}>
-                <option value="">Employee (base)</option>
-                {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-              </select></div>
-            <button className="btn-primary">Create invitation</button>
-          </form>
-          {link && <p className="break-all rounded-lg bg-slate-100 p-3 font-mono text-xs">{link}</p>}
-        </section>
-      )}
+      <p className="rounded-2xl bg-surface px-4 py-3 text-sm ring-1 ring-border">
+        To add someone or change their job, team or screens, use <Link href="/admin/roles" className="font-medium text-brand-text underline">Roles and permissions</Link>. This page is for account status, Super Admins and authenticator resets.
+      </p>
 
       <section className="card overflow-x-auto p-0">
         <table className="w-full min-w-[720px] text-sm">
-          <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-            <tr><th className="p-3">Person</th><th className="p-3">Roles</th><th className="p-3">Status</th><th className="p-3">Last sign-in</th><th className="p-3"></th></tr>
+          <thead className="thead">
+            <tr><th className="px-5 py-3 font-medium">Person</th><th className="px-5 py-3 font-medium">Roles</th><th className="px-5 py-3 font-medium">Status</th><th className="px-5 py-3 font-medium">Last sign-in</th><th className="px-5 py-3 font-medium"></th></tr>
           </thead>
           <tbody>
             {users.map((u) => (
-              <tr key={u.id} className="border-t border-slate-100">
-                <td className="p-3"><div className="font-medium">{u.full_name || u.email}</div><div className="text-xs text-slate-500">{u.email}</div></td>
-                <td className="p-3">{u.is_super_admin && <span className="pill mr-1 bg-brand-soft text-brand">super admin</span>}{u.roles.map((r) => <span key={r} className="pill mr-1">{r}</span>)}</td>
-                <td className="p-3">{u.status === "active" ? <span className="pill bg-emerald-50 text-emerald-700">active</span> : <span className="pill bg-red-50 text-red-700">deactivated</span>}</td>
-                <td className="p-3 text-xs text-slate-500">{u.last_login_at ? new Date(u.last_login_at).toLocaleString() : "never"}</td>
-                <td className="space-x-2 whitespace-nowrap p-3 text-right">
+              <tr key={u.id} className="border-t border-well">
+                <td className="px-5 py-3.5"><div className="font-medium">{u.full_name || u.email}</div><div className="text-xs text-ink-soft">{u.email}</div></td>
+                <td className="px-5 py-3.5">{u.is_super_admin && <span className="pill-brand mr-1">super admin</span>}{u.roles.map((r) => <span key={r} className="pill mr-1">{r}</span>)}</td>
+                <td className="px-5 py-3.5">{u.status === "active" ? <span className="pill-good">active</span> : <span className="pill-bad">deactivated</span>}</td>
+                <td className="px-5 py-3.5 text-xs text-ink-soft">{u.last_login_at ? new Date(u.last_login_at).toLocaleString() : "never"}</td>
+                <td className="space-x-2 whitespace-nowrap px-5 py-3.5 text-right">
                   {u.id !== me.id && can(me, "admin.roles.manage") && <button className="btn" onClick={() => { setEditing(u); setPicked(roles.filter((r) => u.roles.includes(r.key)).map((r) => r.id)); }}>Roles</button>}
                   {u.id !== me.id && can(me, "admin.users.edit") && (u.status === "active"
                     ? <button className="btn" onClick={() => run(() => api.patch(`/admin/users/${u.id}`, { status: "deactivated" }), "Deactivated. Their sessions have ended.")}>Deactivate</button>
@@ -87,7 +69,7 @@ export default function UsersPage() {
       </section>
 
       {editing && (
-        <div className="fixed inset-0 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 grid place-items-center bg-canvas p-4" role="dialog" aria-modal="true">
           <div className="card w-full max-w-md space-y-3">
             <h3 className="font-semibold">Roles for {editing.full_name || editing.email}</h3>
             {roles.map((r) => (

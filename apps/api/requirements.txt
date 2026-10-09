@@ -9,3 +9,4 @@ PyJWT[crypto]==2.10.1
 cryptography==44.0.0
 itsdangerous==2.2.0
 redis==5.2.1
+anthropic==1.12.1

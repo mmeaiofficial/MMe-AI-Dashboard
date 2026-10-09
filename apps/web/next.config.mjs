@@ -1,10 +1,12 @@
 const api = process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:8000";
+// `next dev` runs its bundles through eval(); production builds do not and keep the strict policy.
+const dev = process.env.NODE_ENV !== "production";
 const csp = [
   "default-src 'self'",
   `connect-src 'self' ${api}`,
   "img-src 'self' https://lh3.googleusercontent.com data:",
   "style-src 'self' 'unsafe-inline'",
-  "script-src 'self' 'unsafe-inline'",
+  `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   `form-action 'self' ${api}`,

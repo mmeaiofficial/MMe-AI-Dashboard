@@ -6,7 +6,7 @@ import { api, ApiError, can } from "@/lib/api";
 
 interface Team { id: string; name: string; kind: string; members?: { user_id: string; full_name: string; email: string; is_manager: boolean }[]; }
 interface Person { user_id: string; full_name: string; email: string; }
-const KINDS = [["sales", "Sales"], ["marketing", "Marketing"], ["tech", "Tech / Development"], ["ai_automation", "AI / Automation"], ["customer_success", "Customer Success"], ["finance_ops", "Finance / Operations"], ["custom", "Custom"]];
+const KINDS = [["lead_gen", "Lead generation"], ["sales_l1", "Sales L1 (cold calling)"], ["sales_l2", "Sales L2 (meetings)"], ["sales", "Sales"], ["marketing", "Marketing"], ["tech", "Tech / Development"], ["ai_automation", "AI / Automation"], ["customer_success", "Customer Success"], ["finance_ops", "Finance / Operations"], ["custom", "Custom"]];
 
 export default function TeamsPage() {
   const { me } = useSession();
@@ -28,8 +28,8 @@ export default function TeamsPage() {
 
   return (
     <div className="max-w-5xl space-y-6">
-      <h1 className="text-2xl font-semibold">Teams</h1>
-      {msg && <p role="status" className="rounded-lg bg-slate-100 px-3 py-2 text-sm">{msg}</p>}
+      <h1 className="text-2xl font-semibold tracking-tight">Teams</h1>
+      {msg && <p role="status" className="rounded-2xl bg-surface px-4 py-3 text-sm ring-1 ring-border">{msg}</p>}
       {can(me, "org.teams.create") && (
         <form className="card flex flex-wrap items-end gap-3" onSubmit={async (e) => { e.preventDefault(); try { await api.post("/teams", { name, kind }); setName(""); await load(); } catch (err) { setMsg((err as ApiError).message); } }}>
           <div className="min-w-56 flex-1"><label className="label" htmlFor="t-name">New team</label><input id="t-name" className="input" required value={name} onChange={(e) => setName(e.target.value)} /></div>
@@ -39,21 +39,21 @@ export default function TeamsPage() {
       )}
       <div className="grid gap-4 md:grid-cols-[280px_1fr]">
         <div className="card space-y-1 p-2">
-          {teams.length === 0 && <p className="p-3 text-sm text-slate-500">No teams yet.</p>}
+          {teams.length === 0 && <p className="p-3 text-sm text-ink-soft">No teams yet.</p>}
           {teams.map((t) => (
-            <button key={t.id} onClick={() => openTeam(t.id)} className={`block w-full rounded-lg px-3 py-2 text-left text-sm ${open?.id === t.id ? "bg-brand-soft text-brand" : "hover:bg-slate-100"}`}>
-              {t.name}<span className="ml-2 text-xs text-slate-400">{t.kind}</span>
+            <button key={t.id} onClick={() => openTeam(t.id)} className={`block w-full rounded-2xl px-3 py-2.5 text-left text-sm ${open?.id === t.id ? "bg-brand-soft text-brand-text" : "hover:bg-canvas"}`}>
+              {t.name}<span className="ml-2 text-xs text-ink-faint">{t.kind}</span>
             </button>
           ))}
         </div>
         {open && (
           <div className="card space-y-3">
             <h2 className="font-semibold">{open.name}</h2>
-            <ul className="divide-y divide-slate-100 text-sm">
+            <ul className="divide-y divide-well text-sm">
               {(open.members || []).map((m) => (
                 <li key={m.user_id} className="flex items-center justify-between py-2">
                   <span>{m.full_name || m.email}{m.is_manager && <span className="pill ml-2">manager</span>}</span>
-                  {editable && <button className="text-xs text-slate-500 underline" onClick={async () => { await api.del(`/teams/${open.id}/members/${m.user_id}`); await openTeam(open.id); }}>Remove</button>}
+                  {editable && <button className="text-xs text-ink-soft underline" onClick={async () => { await api.del(`/teams/${open.id}/members/${m.user_id}`); await openTeam(open.id); }}>Remove</button>}
                 </li>
               ))}
             </ul>

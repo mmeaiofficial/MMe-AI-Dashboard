@@ -13,9 +13,13 @@ from .authz import engine as E
 from .core.config import load_settings
 from .core.db import engine
 from .core.deps import public
+from .modules.access.allocate import router as allocate_router
 from .modules.access.router import router as access_router
+from .modules.assistant.router import router as assistant_router
 from .modules.identity.router import me_router, router as auth_router
 from .modules.org.router import router as org_router
+from .modules.pipeline.router import router as pipeline_router
+from .modules.pipeline.tickets import router as tickets_router
 
 settings = load_settings()  # raises ConfigError on unsafe production settings
 log = logging.getLogger("mme")
@@ -74,6 +78,10 @@ def health() -> dict:
 api.include_router(auth_router)
 api.include_router(me_router)
 api.include_router(access_router)
+api.include_router(allocate_router)
 api.include_router(org_router)
 api.include_router(audit_router)
+api.include_router(assistant_router)
+api.include_router(pipeline_router)
+api.include_router(tickets_router)
 app.include_router(api)

@@ -18,7 +18,7 @@ from ...core.models import Department, Employee, Team, TeamMember, User
 
 router = APIRouter(tags=["organization"])
 
-TEAM_KINDS = Literal["sales", "marketing", "tech", "ai_automation", "customer_success", "finance_ops", "custom"]
+TEAM_KINDS = Literal["lead_gen", "sales_l1", "sales_l2", "sales", "marketing", "tech", "ai_automation", "customer_success", "finance_ops", "custom"]
 
 
 def visible_user_ids(caller: Caller, permission: str) -> Select:

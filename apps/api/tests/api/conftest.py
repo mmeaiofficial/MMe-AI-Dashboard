@@ -25,14 +25,15 @@ from app.core.models import Organization, Role, RoleGrant, Session, TeamMember, 
 from app.core.security import new_token, token_hash  # noqa: E402
 from app.main import app  # noqa: E402
 
-SQL = Path(__file__).resolve().parents[2] / "migrations" / "sql" / "0001_foundation.sql"
+SQL_DIR = Path(__file__).resolve().parents[2] / "migrations" / "sql"
 
 
 @pytest.fixture(scope="session", autouse=True)
 def schema():
     with engine.begin() as c:
         c.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public;"))
-        c.execute(text(SQL.read_text()))
+        for f in sorted(SQL_DIR.glob("*.sql")):
+            c.execute(text(f.read_text()))
     yield
 
 
