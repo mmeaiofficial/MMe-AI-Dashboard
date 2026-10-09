@@ -1,3 +1,24 @@
+# Vercel installs the API from this [project] table with uv. requirements.txt (CI, Docker) must list the
+# same pins; tests/core/test_core.py checks that they match.
+[project]
+name = "mme-os-api"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.143.0",
+    "uvicorn[standard]==0.34.0",
+    "sqlalchemy==2.0.36",
+    "psycopg[binary]==3.2.3",
+    "alembic==1.14.0",
+    "pydantic[email]==2.10.4",
+    "httpx==0.28.1",
+    "PyJWT[crypto]==2.15.1",
+    "cryptography==50.0.2",
+    "itsdangerous==2.2.0",
+    "redis==5.2.1",
+    "anthropic==1.12.1",
+]
+
 [tool.ruff]
 line-length = 140
 target-version = "py312"

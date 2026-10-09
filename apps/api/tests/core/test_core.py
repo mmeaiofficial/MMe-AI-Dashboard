@@ -318,6 +318,18 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(load_settings({"KV_URL": "rediss://default:t@x.upstash.io:6379"}).redis_url, "rediss://default:t@x.upstash.io:6379")
 
 
+class DependencyPinTests(unittest.TestCase):
+    def test_pyproject_matches_requirements(self):
+        # Vercel installs from pyproject.toml; CI and Docker install from requirements.txt.
+        import tomllib
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[2]
+        project = tomllib.loads((root / "pyproject.toml").read_text())["project"]["dependencies"]
+        reqs = [x.strip() for x in (root / "requirements.txt").read_text().splitlines() if x.strip() and not x.startswith("#")]
+        self.assertEqual(sorted(project), sorted(reqs))
+
+
 class ClientIpTests(unittest.TestCase):
     def _request(self, headers: dict[str, str], peer: str = "10.0.0.1"):
         from starlette.requests import Request
