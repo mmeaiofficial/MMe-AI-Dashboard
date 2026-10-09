@@ -16,7 +16,8 @@ from .core.deps import public
 from .modules.access.allocate import router as allocate_router
 from .modules.access.router import router as access_router
 from .modules.assistant.router import router as assistant_router
-from .modules.identity.router import me_router, router as auth_router
+from .modules.identity.router import me_router
+from .modules.identity.router import router as auth_router
 from .modules.org.router import router as org_router
 from .modules.pipeline.router import router as pipeline_router
 from .modules.pipeline.tickets import router as tickets_router
@@ -25,14 +26,18 @@ settings = load_settings()  # raises ConfigError on unsafe production settings
 log = logging.getLogger("mme")
 
 app = FastAPI(
-    title="MME OS API", version="0.1.0",
+    title="MME OS API",
+    version="0.1.0",
     docs_url="/api/docs" if not settings.is_production else None,
     openapi_url="/api/openapi.json" if not settings.is_production else None,
 )
 
 app.add_middleware(
-    CORSMiddleware, allow_origins=[settings.web_origin], allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["content-type", "x-csrf-token", "x-request-id", "idempotency-key"],
+    CORSMiddleware,
+    allow_origins=[settings.web_origin],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["content-type", "x-csrf-token", "x-request-id", "idempotency-key"],
 )
 
 

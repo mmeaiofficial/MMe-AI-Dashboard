@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 from urllib.parse import quote
 
 import httpx
@@ -18,7 +17,7 @@ from ...core import google_oidc as G
 from ...core.config import load_settings
 from ...core.db import get_db
 from ...core.deps import Caller, public, public_context, signed_in_mfa_pending
-from ...core.models import MfaFactor, Role, TeamMember, User, UserRole
+from ...core.models import MfaFactor, Role, User, UserRole
 from ...core.ratelimit import LIMITS, get_limiter
 from ...core.security import csrf_token, new_totp_secret, totp_uri, verify_password, verify_totp
 from . import service as S
@@ -37,18 +36,18 @@ def _limit(name: str, key: str) -> None:
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Too many attempts. Wait a few minutes and try again.")
 
 
-def _safe_next(path: Optional[str]) -> str:
+def _safe_next(path: str | None) -> str:
     return path if path and path.startswith("/") and not path.startswith("//") else "/"
 
 
-def _redirect_web(path: str, error: Optional[str] = None) -> RedirectResponse:
+def _redirect_web(path: str, error: str | None = None) -> RedirectResponse:
     url = settings.web_origin + path + (("?error=" + quote(error)) if error else "")
     return RedirectResponse(url, status_code=303)
 
 
 # ---------- Google ----------
 @router.get("/google/start", dependencies=[Depends(public)])
-def google_start(request: Request, next: Optional[str] = None, invite: Optional[str] = None) -> RedirectResponse:
+def google_start(request: Request, next: str | None = None, invite: str | None = None) -> RedirectResponse:
     _limit("login_ip", request.client.host if request.client else "unknown")
     req = G.build_auth_request(settings.google_client_id, settings.api_origin + "/api/v1/auth/google/callback")
     resp = RedirectResponse(req.url, status_code=303)
@@ -59,7 +58,7 @@ def google_start(request: Request, next: Optional[str] = None, invite: Optional[
 
 
 @router.get("/google/callback", dependencies=[Depends(public)])
-def google_callback(request: Request, code: Optional[str] = None, state: Optional[str] = None,
+def google_callback(request: Request, code: str | None = None, state: str | None = None,
                     db: DbSession = Depends(get_db)) -> RedirectResponse:
     try:
         data = _signer.loads(request.cookies.get(OAUTH_COOKIE, ""), max_age=600)
@@ -157,7 +156,7 @@ def _check_code(caller: Caller, db: DbSession, code: str, confirming: bool) -> N
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "That code didn't match. Check your authenticator and try again.")
     factor.last_used_step = step
     if confirming:
-        factor.confirmed_at = datetime.now(timezone.utc)
+        factor.confirmed_at = datetime.now(UTC)
         caller.user.mfa_required = True
         record(db, caller.ctx, "auth.mfa_enrolled", "user", caller.user.id)
     caller.session.mfa_passed = True

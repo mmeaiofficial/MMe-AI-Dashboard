@@ -3,15 +3,17 @@
 The browser sends the conversation as plain text turns; each request runs one tool loop on the server.
 Tools are read-only for now. Only metadata (tools used, token counts) goes to the audit log, never the text.
 """
+
 from __future__ import annotations
 
 import logging
 import os
 from datetime import date
 from functools import lru_cache
-from typing import Literal
+from typing import Literal, cast
 
 import anthropic
+from anthropic.types.beta import BetaMessageParam, BetaTextBlockParam, BetaToolResultBlockParam
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session as DbSession
@@ -26,7 +28,7 @@ router = APIRouter(prefix="/assistant", tags=["assistant"])
 log = logging.getLogger("mme.rekha")
 
 MODEL = os.environ.get("REKHA_MODEL", "claude-opus-5-5")
-EFFORT = os.environ.get("REKHA_EFFORT", "medium")
+EFFORT = cast(Literal["low", "medium", "high", "xhigh", "max"], os.environ.get("REKHA_EFFORT", "medium"))
 MAX_TOOL_ROUNDS = 8
 # Server-side refusal fallback: a declined request is re-run on Anthropic's recommended model for that category.
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
@@ -78,7 +80,7 @@ def assistant_status(caller: Caller = Depends(signed_in)) -> dict:
 @router.post("/chat")
 def chat(body: ChatIn, caller: Caller = Depends(signed_in), db: DbSession = Depends(get_db)) -> dict:
     if body.messages[-1].role != "user":
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "The last message must be from you.")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "The last message must be from you.")
     if not _configured():
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Rekha isn't set up yet: add ANTHROPIC_API_KEY to the API's environment.")
     limit, window = LIMITS["assistant_user"]
@@ -88,8 +90,8 @@ def chat(body: ChatIn, caller: Caller = Depends(signed_in), db: DbSession = Depe
     u = caller.user
     kind = "Super Admin" if u.is_super_admin else "employee"
     who = f"You are talking to {u.full_name or u.email} ({kind}). Today is {date.today():%A %d %B %Y}."
-    system = [{"type": "text", "text": SYSTEM}, {"type": "text", "text": who}]
-    messages: list[dict] = [{"role": t.role, "content": t.content} for t in body.messages]
+    system: list[BetaTextBlockParam] = [{"type": "text", "text": SYSTEM}, {"type": "text", "text": who}]
+    messages: list[BetaMessageParam] = [{"role": t.role, "content": t.content} for t in body.messages]
     tools = [t.spec() for t in TOOLS]
     used: list[str] = []
     usage = {"input_tokens": 0, "output_tokens": 0}
@@ -97,9 +99,15 @@ def chat(body: ChatIn, caller: Caller = Depends(signed_in), db: DbSession = Depe
     try:
         for _ in range(MAX_TOOL_ROUNDS):
             resp = _client().beta.messages.create(
-                model=MODEL, max_tokens=16000, system=system, tools=tools, messages=messages,
-                output_config={"effort": EFFORT}, cache_control={"type": "ephemeral"},
-                betas=[FALLBACK_BETA], fallbacks="default",
+                model=MODEL,
+                max_tokens=16000,
+                system=system,
+                tools=tools,
+                messages=messages,
+                output_config={"effort": EFFORT},
+                cache_control={"type": "ephemeral"},
+                betas=[FALLBACK_BETA],
+                fallbacks="default",
             )
             usage["input_tokens"] += resp.usage.input_tokens
             usage["output_tokens"] += resp.usage.output_tokens
@@ -107,7 +115,7 @@ def chat(body: ChatIn, caller: Caller = Depends(signed_in), db: DbSession = Depe
                 break
             # Keep the assistant turn exactly as returned (thinking blocks included) before the tool results.
             messages.append({"role": "assistant", "content": resp.content})
-            results = []
+            results: list[BetaToolResultBlockParam] = []
             for block in resp.content:
                 if block.type == "tool_use":
                     used.append(block.name)
@@ -139,6 +147,5 @@ def chat(body: ChatIn, caller: Caller = Depends(signed_in), db: DbSession = Depe
         if stop == "max_tokens":
             reply += "\n\n(Answer cut short. Ask me to continue.)"
 
-    record(db, caller.ctx, "ai.assistant_asked", "assistant", None,
-           after={"model": MODEL, "tools": used, "stop": stop, **usage})
+    record(db, caller.ctx, "ai.assistant_asked", "assistant", None, after={"model": MODEL, "tools": used, "stop": stop, **usage})
     return {"reply": reply, "tools_used": sorted(set(used)), "stop": stop}

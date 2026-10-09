@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterable
+from typing import TypeVar
 
 from fastapi import HTTPException, status
 from sqlalchemy import ColumnElement, false, func, or_, select, true
@@ -14,6 +15,8 @@ from ...core.deps import Caller
 from ...core.models import Team, TeamMember, User
 
 OPEN_CALL_STATUSES = ("qualified", "contacted", "callback")
+
+T = TypeVar("T")
 
 
 def scope_filter(caller: Caller, permission: str, owner_cols: list, team_cols: list) -> ColumnElement[bool]:
@@ -32,6 +35,14 @@ def scope_filter(caller: Caller, permission: str, owner_cols: list, team_cols: l
         dept_users = select(User.id).where(User.department_id.in_(c.department_ids))
         conds += [col.in_(dept_users) for col in owner_cols]
     return or_(*conds) if conds else false()
+
+
+def fetch(db: DbSession, model: type[T], row_id: uuid.UUID) -> T:
+    """A row another record points to (a ticket's project, a meeting's lead); 404 if it has gone."""
+    obj = db.get(model, row_id)
+    if obj is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found.")
+    return obj
 
 
 def require(caller: Caller, permission: str) -> None:
@@ -64,7 +75,7 @@ def pick_least_loaded(db: DbSession, org_id: uuid.UUID, kind: str, load_col, loa
     if not members:
         return None, None
     ids = list({u for u, _ in members})
-    loads = dict(db.execute(select(load_col, func.count()).where(load_col.in_(ids), load_where).group_by(load_col)).all())
+    loads = dict(db.execute(select(load_col, func.count()).where(load_col.in_(ids), load_where).group_by(load_col)).tuples().all())
     user_id, team_id = min(members, key=lambda m: (loads.get(m[0], 0), str(m[0])))
     return user_id, team_id
 

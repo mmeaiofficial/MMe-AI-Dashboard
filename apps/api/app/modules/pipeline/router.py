@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Literal
@@ -26,7 +27,7 @@ from ...authz import engine as E
 from ...core.db import get_db
 from ...core.deps import Caller, requires
 from ...core.models import Client, Lead, LeadCall, Meeting, Project, Ticket
-from .common import OPEN_CALL_STATUSES, first_team, iso, names, person, pick_least_loaded, require, scope_filter
+from .common import OPEN_CALL_STATUSES, fetch, first_team, iso, names, person, pick_least_loaded, require, scope_filter
 from .tickets import create_tickets
 
 router = APIRouter(tags=["pipeline"])
@@ -69,7 +70,7 @@ def _lead_out(lead: Lead, people: dict, last_call: LeadCall | None = None) -> di
     return out
 
 
-def _lead_people(db: DbSession, leads: list[Lead]) -> dict:
+def _lead_people(db: DbSession, leads: Sequence[Lead]) -> dict:
     return names(db, [x for lead in leads for x in (lead.created_by, lead.caller_id, lead.closer_id)])
 
 
@@ -154,7 +155,7 @@ def list_leads(
         Lead.organization_id == caller.user.organization_id,
         scope_filter(caller, "crm.leads.view", [Lead.created_by, Lead.caller_id, Lead.closer_id], [Lead.source_team_id]),
     )
-    counts = dict(db.execute(select(Lead.status, func.count()).where(scope).group_by(Lead.status)).all())
+    counts = dict(db.execute(select(Lead.status, func.count()).where(scope).group_by(Lead.status)).tuples().all())
     query = select(Lead).where(scope)
     if status_:
         query = query.where(Lead.status.in_([s for s in status_.split(",") if s]))
@@ -192,7 +193,7 @@ def import_leads(body: ImportIn, caller: Caller = Depends(requires("crm.leads.cr
     org = caller.user.organization_id
     team = first_team(db, org, "lead_gen", caller.user.id)
     known_phones = {_norm_phone(p) for p in db.scalars(select(Lead.phone).where(Lead.organization_id == org, Lead.phone.is_not(None)))}
-    known_emails = {e.lower() for e in db.scalars(select(Lead.email).where(Lead.organization_id == org, Lead.email.is_not(None)))}
+    known_emails = {e.lower() for e in db.scalars(select(Lead.email).where(Lead.organization_id == org, Lead.email.is_not(None))) if e}
     created = skipped = 0
     for row in body.leads:
         data = _clean(row)
@@ -202,8 +203,10 @@ def import_leads(body: ImportIn, caller: Caller = Depends(requires("crm.leads.cr
             continue
         data["source"] = row.source if row.source != "manual" else "import"
         db.add(Lead(organization_id=org, created_by=caller.user.id, source_team_id=team, **data))
-        known_phones.add(phone)
-        known_emails.add(email)
+        if phone:
+            known_phones.add(phone)
+        if email:
+            known_emails.add(email)
         created += 1
     db.flush()
     record(db, caller.ctx, "crm.leads_imported", "lead", None, after={"created": created, "skipped": skipped})
@@ -344,9 +347,9 @@ def log_call(
         raise HTTPException(status.HTTP_409_CONFLICT, "This lead isn't in the call queue any more.")
     now = _now()
     if body.outcome == "callback" and (body.callback_at is None or body.callback_at <= now):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Pick a future time for the callback.")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Pick a future time for the callback.")
     if body.outcome == "meeting_booked" and (body.meeting is None or body.meeting.scheduled_at <= now - timedelta(hours=1)):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Add the meeting's date and time.")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Add the meeting's date and time.")
     if lead.caller_id is None:  # calling from the shared pool claims the lead
         lead.caller_id, lead.caller_team_id = caller.user.id, first_team(db, lead.organization_id, "sales_l1", caller.user.id)
 
@@ -365,6 +368,8 @@ def log_call(
         lead.status, lead.next_call_at = "callback", body.callback_at or now + timedelta(days=1)
     else:  # meeting_booked: hand over to Sales L2
         m = body.meeting
+        if m is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Pick a date and time for the meeting.")
         closer_id, team_id = pick_least_loaded(db, lead.organization_id, "sales_l2", Meeting.closer_id, Meeting.status == "scheduled")
         meeting = Meeting(
             organization_id=lead.organization_id,
@@ -488,7 +493,7 @@ def list_meetings(
 @router.get("/meetings/{meeting_id}")
 def get_meeting(meeting_id: uuid.UUID, caller: Caller = Depends(requires("sales.deals.view")), db: DbSession = Depends(get_db)) -> dict:
     m = _get_meeting(db, caller, meeting_id, "sales.deals.view")
-    lead = db.get(Lead, m.lead_id)
+    lead = fetch(db, Lead, m.lead_id)
     out = _meeting_out(m, lead, names(db, [m.booked_by, m.closer_id])) | {"calls": _call_history(db, lead.id)}
     project = db.scalar(select(Project).where(Project.meeting_id == m.id))
     if project is not None:
@@ -523,7 +528,7 @@ def reschedule_meeting(
         before={"scheduled_at": before},
         after={"scheduled_at": iso(m.scheduled_at)},
     )
-    return _meeting_out(m, db.get(Lead, m.lead_id), names(db, [m.booked_by, m.closer_id]))
+    return _meeting_out(m, fetch(db, Lead, m.lead_id), names(db, [m.booked_by, m.closer_id]))
 
 
 @router.post("/meetings/{meeting_id}/complete")
@@ -534,8 +539,10 @@ def complete_meeting(
     if m.status != "scheduled":
         raise HTTPException(status.HTTP_409_CONFLICT, "This meeting has already been closed.")
     if body.outcome == "won" and not body.requirements:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Add at least one feature the client needs, so tech knows what to build.")
-    lead = db.get(Lead, m.lead_id)
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, "Add at least one feature the client needs, so tech knows what to build."
+        )
+    lead = fetch(db, Lead, m.lead_id)
     now, notes = _now(), (body.notes or "").strip() or None
     if m.closer_id is None:
         m.closer_id, m.closer_team_id = caller.user.id, first_team(db, m.organization_id, "sales_l2", caller.user.id)

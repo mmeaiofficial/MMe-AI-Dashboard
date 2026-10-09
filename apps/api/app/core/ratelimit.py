@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Optional, Protocol
+from typing import Protocol
 
 
 class Limiter(Protocol):
@@ -41,13 +41,14 @@ class RedisLimiter:
         return int(count) <= limit
 
 
-_limiter: Optional[Limiter] = None
+_limiter: Limiter | None = None
 
 
 def get_limiter() -> Limiter:
     global _limiter
     if _limiter is None:
         import os
+
         from .config import load_settings
         s = load_settings()
         backend = os.environ.get("RATE_LIMIT_BACKEND", "redis")

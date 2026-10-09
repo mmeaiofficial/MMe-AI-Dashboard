@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Mapping
 
 UNSAFE_SECRETS = {"", "change-me", "changeme", "secret", "your-secret-key-change-in-production", "dev-secret"}
 

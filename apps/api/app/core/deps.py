@@ -6,13 +6,14 @@ Every route must declare its access with exactly one of:
     public_route(...)                              -> no session (sign-in endpoints, health)
 tests/api/test_route_permissions.py fails the build if a route declares none.
 """
+
 from __future__ import annotations
 
 import ipaddress
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Callable, Optional
+from datetime import UTC, datetime, timedelta
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -44,7 +45,7 @@ class Caller:
     raw_token: str
 
 
-def _client_ip(request: Request) -> Optional[str]:
+def _client_ip(request: Request) -> str | None:
     """The caller's IP, or None when the transport reports something else (Unix socket, test client)."""
     host = request.client.host if request.client else None
     try:
@@ -53,11 +54,14 @@ def _client_ip(request: Request) -> Optional[str]:
         return None
 
 
-def _ctx(request: Request, org_id: uuid.UUID, user_id: Optional[uuid.UUID]) -> RequestContext:
-    return RequestContext(organization_id=org_id, actor_user_id=user_id,
-                          ip=_client_ip(request),
-                          user_agent=request.headers.get("user-agent"),
-                          request_id=request.headers.get("x-request-id") or getattr(request.state, "request_id", None))
+def _ctx(request: Request, org_id: uuid.UUID, user_id: uuid.UUID | None) -> RequestContext:
+    return RequestContext(
+        organization_id=org_id,
+        actor_user_id=user_id,
+        ip=_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        request_id=request.headers.get("x-request-id") or getattr(request.state, "request_id", None),
+    )
 
 
 def build_subject(db: DbSession, user: User, mfa_passed: bool) -> E.Subject:
@@ -68,11 +72,15 @@ def build_subject(db: DbSession, user: User, mfa_passed: bool) -> E.Subject:
     ).all()
     teams = db.execute(select(TeamMember.team_id, TeamMember.is_manager).where(TeamMember.user_id == user.id)).all()
     return E.Subject(
-        user_id=user.id, organization_id=user.organization_id,
+        user_id=user.id,
+        organization_id=user.organization_id,
         grants=tuple(E.Grant(p, s) for p, s in rows),
-        team_ids=frozenset(t for t, _ in teams), managed_team_ids=frozenset(t for t, m in teams if m),
-        department_id=user.department_id, is_super_admin=user.is_super_admin,
-        mfa_passed=mfa_passed, active=user.status == "active",
+        team_ids=frozenset(t for t, _ in teams),
+        managed_team_ids=frozenset(t for t, m in teams if m),
+        department_id=user.department_id,
+        is_super_admin=user.is_super_admin,
+        mfa_passed=mfa_passed,
+        active=user.status == "active",
     )
 
 
@@ -81,7 +89,7 @@ def _load_caller(request: Request, db: DbSession, allow_mfa_pending: bool) -> Ca
     if not raw:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sign in to continue.")
     sess = db.scalar(select(Session).where(Session.token_hash == token_hash(raw)))
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     idle = timedelta(minutes=settings.session_idle_minutes)
     if sess is None or sess.revoked_at is not None or sess.expires_at <= now or sess.last_seen_at + idle <= now:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Your session has ended. Sign in again.")
@@ -119,11 +127,13 @@ def requires(permission: str) -> Callable[..., Caller]:
             E.require(caller.subject, permission)
         except E.Forbidden:
             if E.requires_mfa(permission) and not caller.subject.mfa_passed:
-                raise HTTPException(status.HTTP_403_FORBIDDEN, "This action needs your authenticator code.", headers={"x-mfa-required": "1"})
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "You don't have permission to do that.")
+                raise HTTPException(
+                    status.HTTP_403_FORBIDDEN, "This action needs your authenticator code.", headers={"x-mfa-required": "1"}
+                ) from None
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "You don't have permission to do that.") from None
         return caller
 
-    dep.__mme_permission__ = permission  # read by the route-permission test
+    dep.__mme_permission__ = permission  # type: ignore[attr-defined]  # read by the route-permission test
     return dep
 
 

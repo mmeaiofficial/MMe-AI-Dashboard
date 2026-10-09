@@ -61,7 +61,7 @@ def _features(grants: list[tuple[str, str]]) -> list[dict]:
 def _role_grants(db: DbSession, role_ids: list[uuid.UUID]) -> list[tuple[str, str]]:
     if not role_ids:
         return []
-    return list(db.execute(select(RoleGrant.permission, RoleGrant.scope).where(RoleGrant.role_id.in_(role_ids))).all())
+    return list(db.execute(select(RoleGrant.permission, RoleGrant.scope).where(RoleGrant.role_id.in_(role_ids))).tuples().all())
 
 
 @router.get("/access")
@@ -188,16 +188,16 @@ def allocate(body: AllocateIn, caller: Caller = Depends(requires("admin.roles.ma
         if team is None or team.organization_id != org or team.deleted_at is not None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Team not found.")
     if body.team_manager and team is None:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Pick the team they manage.")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Pick the team they manage.")
 
     job_grants = {(g.permission, g.scope) for g in job.grants}
     chosen = {(g.permission, g.scope) for g in body.grants} if body.grants is not None else job_grants
     try:
         grants = [E.Grant(p, s) for p, s in sorted(chosen)]
     except ValueError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from None
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None
     if len({g.permission for g in grants}) != len(grants):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Each permission can have only one reach.")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Each permission can have only one reach.")
 
     user = db.scalar(select(User).where(User.organization_id == org, User.email == email))
     if user is not None and user.is_super_admin and not caller.subject.is_super_admin:

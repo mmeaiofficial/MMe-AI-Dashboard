@@ -6,7 +6,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -18,24 +18,24 @@ REDACT = {"password", "password_hash", "secret", "secret_enc", "token", "token_h
 @dataclass(frozen=True)
 class RequestContext:
     organization_id: uuid.UUID
-    actor_user_id: Optional[uuid.UUID]
-    ip: Optional[str]
-    user_agent: Optional[str]
-    request_id: Optional[str]
+    actor_user_id: uuid.UUID | None
+    ip: str | None
+    user_agent: str | None
+    request_id: str | None
 
 
 def _clean(value: Any) -> Any:
     if isinstance(value, dict):
         return {k: ("[redacted]" if k in REDACT else _clean(v)) for k, v in value.items()}
-    if isinstance(value, (list, tuple, set, frozenset)):
+    if isinstance(value, list | tuple | set | frozenset):
         return [_clean(v) for v in value]
-    if isinstance(value, (uuid.UUID, datetime, date)):
+    if isinstance(value, uuid.UUID | datetime | date):
         return str(value)
     return value
 
 
-def record_now(ctx: RequestContext, action: str, target_type: Optional[str] = None,
-               target_id: Optional[Any] = None, before: Optional[dict] = None, after: Optional[dict] = None) -> None:
+def record_now(ctx: RequestContext, action: str, target_type: str | None = None,
+               target_id: Any | None = None, before: dict | None = None, after: dict | None = None) -> None:
     """For security events on a request that is about to fail (failed sign-in, wrong MFA code):
     written in its own transaction so the request's rollback does not erase it."""
     from ..core.db import SessionLocal
@@ -47,8 +47,8 @@ def record_now(ctx: RequestContext, action: str, target_type: Optional[str] = No
         db.close()
 
 
-def record(db: Session, ctx: RequestContext, action: str, target_type: Optional[str] = None,
-           target_id: Optional[Any] = None, before: Optional[dict] = None, after: Optional[dict] = None) -> None:
+def record(db: Session, ctx: RequestContext, action: str, target_type: str | None = None,
+           target_id: Any | None = None, before: dict | None = None, after: dict | None = None) -> None:
     db.add(AuditEvent(
         organization_id=ctx.organization_id, actor_user_id=ctx.actor_user_id, action=action,
         target_type=target_type, target_id=str(target_id) if target_id is not None else None,

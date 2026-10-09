@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import base64
 import os
-from typing import Mapping
+from collections.abc import Mapping
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -34,7 +34,7 @@ class FieldCipher:
         self._active = active_kid
 
     @classmethod
-    def from_env(cls, spec: str, active_kid: str) -> "FieldCipher":
+    def from_env(cls, spec: str, active_kid: str) -> FieldCipher:
         """spec = "kid1:base64key,kid2:base64key" """
         keys = {}
         for part in filter(None, (p.strip() for p in spec.split(","))):

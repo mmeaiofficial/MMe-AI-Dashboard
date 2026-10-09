@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
@@ -17,11 +16,11 @@ router = APIRouter(tags=["audit"])
 
 @router.get("/audit-events")
 def list_audit_events(
-    action: Optional[str] = Query(default=None, max_length=80),
-    actor_user_id: Optional[uuid.UUID] = None,
-    target_id: Optional[str] = Query(default=None, max_length=80),
-    before_id: Optional[int] = None,
-    since: Optional[datetime] = None,
+    action: str | None = Query(default=None, max_length=80),
+    actor_user_id: uuid.UUID | None = None,
+    target_id: str | None = Query(default=None, max_length=80),
+    before_id: int | None = None,
+    since: datetime | None = None,
     limit: int = Query(default=50, ge=1, le=100),
     caller: Caller = Depends(requires("audit.events.view")),
     db: DbSession = Depends(get_db),

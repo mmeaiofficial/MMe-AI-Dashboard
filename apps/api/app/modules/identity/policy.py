@@ -1,9 +1,9 @@
 """Who may sign in. Pure function so every branch is unit-tested."""
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable, Optional
 
 
 class Decision(str, Enum):
@@ -18,10 +18,10 @@ class Decision(str, Enum):
 @dataclass(frozen=True)
 class ExistingUser:
     status: str
-    google_subject: Optional[str]
+    google_subject: str | None
 
 
-def decide_sign_in(email: str, google_subject: Optional[str], existing: Optional[ExistingUser],
+def decide_sign_in(email: str, google_subject: str | None, existing: ExistingUser | None,
                    has_open_invitation: bool, allowed_domains: Iterable[str]) -> Decision:
     email = email.lower()
     if existing is not None:

@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from fastapi import Response
 from sqlalchemy import select, update
@@ -35,17 +34,17 @@ def default_org(db: DbSession) -> Organization:
     return org
 
 
-def open_invitation(db: DbSession, org_id: uuid.UUID, email: str, raw_token: Optional[str]) -> Optional[Invitation]:
+def open_invitation(db: DbSession, org_id: uuid.UUID, email: str, raw_token: str | None) -> Invitation | None:
     q = select(Invitation).where(Invitation.organization_id == org_id, Invitation.email == email,
                                  Invitation.accepted_at.is_(None), Invitation.revoked_at.is_(None),
-                                 Invitation.expires_at > datetime.now(timezone.utc))
+                                 Invitation.expires_at > datetime.now(UTC))
     if raw_token:
         q = q.where(Invitation.token_hash == token_hash(raw_token))
     return db.scalar(q)
 
 
-def create_user(db: DbSession, org: Organization, email: str, name: str, google_subject: Optional[str],
-                avatar: Optional[str], invitation: Optional[Invitation], ctx: RequestContext, super_admin: bool = False) -> User:
+def create_user(db: DbSession, org: Organization, email: str, name: str, google_subject: str | None,
+                avatar: str | None, invitation: Invitation | None, ctx: RequestContext, super_admin: bool = False) -> User:
     user = User(organization_id=org.id, email=email, full_name=name, google_subject=google_subject,
                 avatar_url=avatar if (avatar or "").startswith("https://") else None,
                 is_super_admin=super_admin, mfa_required=super_admin,
@@ -63,7 +62,7 @@ def create_user(db: DbSession, org: Organization, email: str, name: str, google_
     for tid in (invitation.team_ids if invitation else []):
         db.add(TeamMember(team_id=tid, user_id=user.id, organization_id=org.id, is_manager=tid in managed))
     if invitation:
-        invitation.accepted_at = datetime.now(timezone.utc)
+        invitation.accepted_at = datetime.now(UTC)
     record(db, RequestContext(org.id, user.id, ctx.ip, ctx.user_agent, ctx.request_id), "admin.user_created",
            "user", user.id, after={"email": email, "via": "invitation" if invitation else ("bootstrap" if super_admin else "domain"),
                                   "role_ids": role_ids, "super_admin": super_admin})
@@ -72,7 +71,7 @@ def create_user(db: DbSession, org: Organization, email: str, name: str, google_
 
 def start_session(db: DbSession, user: User, response: Response, ctx: RequestContext) -> str:
     raw = new_token()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     db.add(Session(user_id=user.id, organization_id=user.organization_id, token_hash=token_hash(raw), mfa_passed=False,
                    ip=ctx.ip, user_agent=(ctx.user_agent or "")[:400], expires_at=now + timedelta(hours=settings.session_hours),
                    last_seen_at=now))
@@ -84,12 +83,12 @@ def start_session(db: DbSession, user: User, response: Response, ctx: RequestCon
 
 
 def end_session(db: DbSession, sess: Session, response: Response, ctx: RequestContext) -> None:
-    sess.revoked_at = datetime.now(timezone.utc)
+    sess.revoked_at = datetime.now(UTC)
     response.delete_cookie(SESSION_COOKIE, path="/", domain=COOKIE_DOMAIN)
     record(db, ctx, "auth.logout", "user", sess.user_id)
 
 
 def revoke_all_sessions(db: DbSession, user_id: uuid.UUID) -> int:
     res = db.execute(update(Session).where(Session.user_id == user_id, Session.revoked_at.is_(None))
-                     .values(revoked_at=datetime.now(timezone.utc)))
+                     .values(revoked_at=datetime.now(UTC)))
     return res.rowcount or 0

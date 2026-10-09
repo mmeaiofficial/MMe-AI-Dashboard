@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from anthropic.types.beta import BetaToolParam
 from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
@@ -40,7 +41,7 @@ class Tool:
     permission: str | None
     run: Callable[[Caller, DbSession, dict], Any]
 
-    def spec(self) -> dict:
+    def spec(self) -> BetaToolParam:
         return {"name": self.name, "description": self.description, "input_schema": self.input_schema}
 
 
@@ -86,7 +87,7 @@ def search_people(caller: Caller, db: DbSession, args: dict) -> dict:
 def list_teams(caller: Caller, db: DbSession, _: dict) -> dict:
     teams = db.scalars(_teams_in_scope(caller, "org.teams.view").order_by(Team.name)).all()
     counts = dict(db.execute(select(TeamMember.team_id, func.count()).where(TeamMember.team_id.in_([t.id for t in teams]))
-                             .group_by(TeamMember.team_id)).all()) if teams else {}
+                             .group_by(TeamMember.team_id)).tuples().all()) if teams else {}
     return {"teams": [{"name": t.name, "kind": t.kind, "members": counts.get(t.id, 0)} for t in teams]}
 
 
@@ -124,7 +125,7 @@ def recent_activity(caller: Caller, db: DbSession, args: dict) -> dict:
 
 def list_roles(caller: Caller, db: DbSession, _: dict) -> dict:
     holders = dict(db.execute(select(UserRole.role_id, func.count()).where(UserRole.organization_id == caller.user.organization_id)
-                              .group_by(UserRole.role_id)).all())
+                              .group_by(UserRole.role_id)).tuples().all())
     roles = _list_roles(caller=caller, db=db)
     return {"roles": [{"name": r["name"], "people": holders.get(uuid.UUID(r["id"]), 0), "grants": len(r["grants"])} for r in roles]}
 

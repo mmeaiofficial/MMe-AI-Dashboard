@@ -5,7 +5,7 @@ from fastapi.routing import APIRoute
 from sqlalchemy import text
 
 from app.core.db import engine
-from app.core.deps import public, signed_in, signed_in_mfa_pending
+from app.core.deps import signed_in, signed_in_mfa_pending
 from app.main import app
 
 

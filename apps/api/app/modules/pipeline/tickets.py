@@ -21,7 +21,7 @@ from ...authz import engine as E
 from ...core.db import get_db
 from ...core.deps import Caller, requires
 from ...core.models import Client, Lead, Meeting, Project, TeamMember, Ticket, TicketNote, User
-from .common import first_team, iso, names, person, scope_filter
+from .common import fetch, first_team, iso, names, person, scope_filter
 
 router = APIRouter(tags=["tickets"])
 
@@ -128,7 +128,7 @@ def list_tickets(
 @router.get("/tickets/{ticket_id}")
 def get_ticket(ticket_id: uuid.UUID, caller: Caller = Depends(requires("work.tasks.view")), db: DbSession = Depends(get_db)) -> dict:
     t = _get_ticket(db, caller, ticket_id, "work.tasks.view")
-    project, client = db.get(Project, t.project_id), db.get(Client, t.client_id)
+    project, client = fetch(db, Project, t.project_id), fetch(db, Client, t.client_id)
     meeting = db.get(Meeting, project.meeting_id) if project.meeting_id else None
     lead = db.get(Lead, client.lead_id) if client.lead_id else None
     notes = db.scalars(select(TicketNote).where(TicketNote.ticket_id == t.id).order_by(TicketNote.created_at)).all()
@@ -191,7 +191,7 @@ def update_ticket(
         on_team = t.team_id is not None and db.get(TeamMember, (t.team_id, body.assignee_id)) is not None
         target = db.get(User, body.assignee_id)
         if not on_team or target is None or target.status != "active":
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Tickets can be given to people on the ticket's team.")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Tickets can be given to people on the ticket's team.")
     for k, v in fields.items():
         setattr(t, k, v)
     if "status" in fields:
@@ -200,7 +200,7 @@ def update_ticket(
     db.refresh(t)
     record(db, caller.ctx, "work.ticket_updated", "ticket", t.id, before=before, after=fields)
     people = names(db, [t.assignee_id, t.created_by])
-    return _ticket_out(t, db.get(Project, t.project_id), db.get(Client, t.client_id), people)
+    return _ticket_out(t, fetch(db, Project, t.project_id), fetch(db, Client, t.client_id), people)
 
 
 class NoteIn(BaseModel):

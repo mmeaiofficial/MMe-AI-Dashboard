@@ -1,13 +1,15 @@
 """Core security tests. Standard library only: run with `python -m unittest discover -s tests/core`
 from apps/api. They also run under pytest in CI."""
+
 import base64
 import os
 import time
 import unittest
 import uuid
 
-from cryptography.hazmat.primitives.asymmetric import rsa
 import jwt
+from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 from app.authz import engine as E
 from app.authz.catalog import ALL_PERMISSIONS, DEFAULT_ROLES, validate_catalog
@@ -122,8 +124,12 @@ class EscalationTests(unittest.TestCase):
             E.check_role_assignment(subject("operations_admin", mfa_passed=True), PEER, role_grants("employee"))
 
     def test_delegated_admin_cannot_grant_wider_than_held(self):
-        delegate = E.Subject(user_id=ME, organization_id=ORG, mfa_passed=True,
-                             grants=(E.Grant("admin.roles.manage", "all"), E.Grant("crm.leads.view", "team")))
+        delegate = E.Subject(
+            user_id=ME,
+            organization_id=ORG,
+            mfa_passed=True,
+            grants=(E.Grant("admin.roles.manage", "all"), E.Grant("crm.leads.view", "team")),
+        )
         E.check_role_assignment(delegate, PEER, (E.Grant("crm.leads.view", "own"),))
         with self.assertRaises(E.EscalationDenied):
             E.check_role_assignment(delegate, PEER, (E.Grant("crm.leads.view", "all"),))
@@ -195,11 +201,11 @@ class CryptoTests(unittest.TestCase):
         c = FieldCipher({"k1": self.k1}, "k1")
         ct = c.encrypt("JBSWY3DPEHPK3PXP", "mfa:user-1")
         self.assertEqual(c.decrypt(ct, "mfa:user-1"), "JBSWY3DPEHPK3PXP")
-        with self.assertRaises(Exception):
+        with self.assertRaises(InvalidTag):
             c.decrypt(ct, "mfa:user-2")
         parts = ct.split(".")
         parts[3] = parts[3][:-2] + ("AA" if parts[3][-2:] != "AA" else "BB")
-        with self.assertRaises(Exception):
+        with self.assertRaises(InvalidTag):
             c.decrypt(".".join(parts), "mfa:user-1")
 
     def test_rotation(self):
@@ -224,8 +230,18 @@ class GoogleTests(unittest.TestCase):
 
     def token(self, **over):
         now = int(time.time())
-        claims = {"iss": "https://accounts.google.com", "aud": self.CLIENT, "sub": "1234", "iat": now, "exp": now + 600,
-                  "email": "Neha@MME-AI.com", "email_verified": True, "nonce": "n1", "name": "Neha", "hd": "mme-ai.com"}
+        claims = {
+            "iss": "https://accounts.google.com",
+            "aud": self.CLIENT,
+            "sub": "1234",
+            "iat": now,
+            "exp": now + 600,
+            "email": "Neha@MME-AI.com",
+            "email_verified": True,
+            "nonce": "n1",
+            "name": "Neha",
+            "hd": "mme-ai.com",
+        }
         claims.update(over)
         return jwt.encode(claims, self.key, algorithm="RS256", headers={"kid": "k"})
 
@@ -280,10 +296,18 @@ class ConfigTests(unittest.TestCase):
             load_settings({"APP_ENV": "production", "SECRET_KEY": "your-secret-key-change-in-production"})
 
     def test_production_ok_when_configured(self):
-        env = {"APP_ENV": "production", "SECRET_KEY": "x" * 48, "FIELD_ENCRYPTION_KEYS": "k1:" + base64.urlsafe_b64encode(os.urandom(32)).decode(),
-               "FIELD_ENCRYPTION_ACTIVE_KID": "k1", "GOOGLE_CLIENT_ID": "id", "GOOGLE_CLIENT_SECRET": "s",
-               "WEB_ORIGIN": "https://os.mme-ai.com", "API_ORIGIN": "https://api.mme-ai.com", "DATABASE_URL": "postgresql+psycopg://app:pw@db:5432/mme",
-               "BOOTSTRAP_SUPER_ADMINS": "A@B.com, c@d.com"}
+        env = {
+            "APP_ENV": "production",
+            "SECRET_KEY": "x" * 48,
+            "FIELD_ENCRYPTION_KEYS": "k1:" + base64.urlsafe_b64encode(os.urandom(32)).decode(),
+            "FIELD_ENCRYPTION_ACTIVE_KID": "k1",
+            "GOOGLE_CLIENT_ID": "id",
+            "GOOGLE_CLIENT_SECRET": "s",
+            "WEB_ORIGIN": "https://os.mme-ai.com",
+            "API_ORIGIN": "https://api.mme-ai.com",
+            "DATABASE_URL": "postgresql+psycopg://app:pw@db:5432/mme",
+            "BOOTSTRAP_SUPER_ADMINS": "A@B.com, c@d.com",
+        }
         s = load_settings(env)
         self.assertTrue(s.cookie_secure)
         self.assertEqual(s.bootstrap_super_admins, ("a@b.com", "c@d.com"))

@@ -8,14 +8,15 @@ from __future__ import annotations
 import base64
 import hashlib
 import secrets
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Any
 from urllib.parse import urlencode
 
 import jwt  # PyJWT
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
-TOKEN_URL = "https://oauth2.googleapis.com/token"
+TOKEN_URL = "https://oauth2.googleapis.com/token"  # nosec B105
 JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 ISSUERS = ("https://accounts.google.com", "accounts.google.com")
 
@@ -25,8 +26,8 @@ class GoogleIdentity:
     subject: str
     email: str
     name: str
-    picture: Optional[str]
-    hosted_domain: Optional[str]
+    picture: str | None
+    hosted_domain: str | None
 
 
 @dataclass(frozen=True)
@@ -37,7 +38,7 @@ class AuthRequest:
     code_verifier: str
 
 
-def build_auth_request(client_id: str, redirect_uri: str, hosted_domain: Optional[str] = None) -> AuthRequest:
+def build_auth_request(client_id: str, redirect_uri: str, hosted_domain: str | None = None) -> AuthRequest:
     state, nonce, verifier = secrets.token_urlsafe(24), secrets.token_urlsafe(24), secrets.token_urlsafe(48)
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
     params = {
@@ -54,7 +55,7 @@ class InvalidGoogleToken(Exception):
     pass
 
 
-_jwks_client: Optional[jwt.PyJWKClient] = None
+_jwks_client: jwt.PyJWKClient | None = None
 
 
 def _default_key_resolver(token: str):
@@ -65,7 +66,7 @@ def _default_key_resolver(token: str):
 
 
 def verify_id_token(id_token: str, client_id: str, nonce: str,
-                    key_resolver: Callable[[str], object] = _default_key_resolver,
+                    key_resolver: Callable[[str], Any] = _default_key_resolver,
                     leeway: int = 60) -> GoogleIdentity:
     try:
         key = key_resolver(id_token)

@@ -2,11 +2,11 @@
 
 TEST_DATABASE_URL must point at an empty database the tests may wipe.
 """
+
 from __future__ import annotations
 
 import os
-import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -21,7 +21,7 @@ from sqlalchemy import text  # noqa: E402
 from app.authz.catalog import DEFAULT_ROLES  # noqa: E402
 from app.core.db import SessionLocal, engine  # noqa: E402
 from app.core.deps import SESSION_COOKIE  # noqa: E402
-from app.core.models import Organization, Role, RoleGrant, Session, TeamMember, Team, User, UserRole, Employee  # noqa: E402
+from app.core.models import Employee, Organization, Role, RoleGrant, Session, Team, TeamMember, User, UserRole  # noqa: E402
 from app.core.security import new_token, token_hash  # noqa: E402
 from app.main import app  # noqa: E402
 
@@ -59,7 +59,9 @@ def world(schema):
     db.flush()
 
     def mk(email, role=None, team=None, super_admin=False, manager=False):
-        u = User(organization_id=org.id, email=email, full_name=email.split("@")[0].title(), is_super_admin=super_admin, mfa_required=super_admin)
+        u = User(
+            organization_id=org.id, email=email, full_name=email.split("@")[0].title(), is_super_admin=super_admin, mfa_required=super_admin
+        )
         db.add(u)
         db.flush()
         db.add(Employee(user_id=u.id, organization_id=org.id))
@@ -88,8 +90,16 @@ class Client:
     def __init__(self, user: User, mfa: bool = True):
         raw = new_token()
         db = SessionLocal()
-        db.add(Session(user_id=user.id, organization_id=user.organization_id, token_hash=token_hash(raw), mfa_passed=mfa,
-                       expires_at=datetime.now(timezone.utc) + timedelta(hours=2), last_seen_at=datetime.now(timezone.utc)))
+        db.add(
+            Session(
+                user_id=user.id,
+                organization_id=user.organization_id,
+                token_hash=token_hash(raw),
+                mfa_passed=mfa,
+                expires_at=datetime.now(UTC) + timedelta(hours=2),
+                last_seen_at=datetime.now(UTC),
+            )
+        )
         db.commit()
         db.close()
         self.http = TestClient(app)
@@ -109,4 +119,5 @@ class Client:
 def as_user(world):
     def make(key: str, mfa: bool = True) -> Client:
         return Client(world["users"][key], mfa=mfa)
+
     return make

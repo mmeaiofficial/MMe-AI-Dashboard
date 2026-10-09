@@ -9,11 +9,11 @@ Rules
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Iterable, Optional
+from collections.abc import Iterable
+from dataclasses import dataclass
 from uuid import UUID
 
-from .catalog import ACTIONS, ALL_PERMISSIONS, SCOPES, MFA_REQUIRED_ACTIONS, MFA_REQUIRED_PREFIXES
+from .catalog import ALL_PERMISSIONS, MFA_REQUIRED_ACTIONS, MFA_REQUIRED_PREFIXES, SCOPES
 
 RANK = {s: i for i, s in enumerate(SCOPES)}
 
@@ -53,7 +53,7 @@ class Subject:
     grants: tuple[Grant, ...] = ()
     team_ids: frozenset[UUID] = frozenset()
     managed_team_ids: frozenset[UUID] = frozenset()
-    department_id: Optional[UUID] = None
+    department_id: UUID | None = None
     is_super_admin: bool = False
     mfa_passed: bool = False
     active: bool = True
@@ -63,9 +63,9 @@ class Subject:
 class RecordRef:
     """What the engine needs to know about a record to place it in a scope."""
     organization_id: UUID
-    owner_id: Optional[UUID] = None
-    team_id: Optional[UUID] = None
-    department_id: Optional[UUID] = None
+    owner_id: UUID | None = None
+    team_id: UUID | None = None
+    department_id: UUID | None = None
     assignee_ids: frozenset[UUID] = frozenset()
 
 
@@ -97,7 +97,7 @@ def effective_grants(grants: Iterable[Grant]) -> dict[str, str]:
     return out
 
 
-def scope_for(subject: Subject, permission: str) -> Optional[str]:
+def scope_for(subject: Subject, permission: str) -> str | None:
     """Widest scope the subject holds for ``permission`` (``manage`` implies all actions)."""
     if permission not in ALL_PERMISSIONS:
         raise ValueError(f"unknown permission {permission}")
